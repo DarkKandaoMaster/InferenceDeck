@@ -1,4 +1,4 @@
-import http from './http'
+import http, { API_BASE_URL } from './http'
 
 /** 上传组学/临床数据 */
 export function uploadOmics(formData: FormData) {
@@ -47,15 +47,16 @@ export function evaluateCustom(formData: FormData) {
 export function runDifferential(params: {
   session_id: string
   omics_type: string
-  sample: string[]
-  labels: number[]
+  sample?: string[]
+  labels?: number[]
 }) {
   return http.post('/differential_analysis', params)
 }
 
 /** 富集分析 */
 export function runEnrichment(params: {
-  cluster_genes: Record<string, string[]>
+  session_id?: string
+  cluster_genes?: Record<string, string[]>
   database: string
 }) {
   return http.post('/enrichment_analysis', params)
@@ -64,8 +65,8 @@ export function runEnrichment(params: {
 /** 生存分析 */
 export function runSurvival(params: {
   session_id: string
-  sample: string[]
-  labels: number[]
+  sample?: string[]
+  labels?: number[]
 }) {
   return http.post('/survival_analysis', params)
 }
@@ -80,9 +81,55 @@ export function runParameterSearch(params: {
   return http.post('/parameter_search', params)
 }
 
+export function renderDifferentialVolcano(params: {
+  session_id: string
+  cluster_id: number
+}) {
+  return http.post('/plots/differential_volcano', params)
+}
+
+export function renderEnrichmentBar(params: {
+  session_id: string
+  database: string
+  cluster_id: number
+}) {
+  return http.post('/plots/enrichment_bar', params)
+}
+
+export function renderEnrichmentBubble(params: {
+  session_id: string
+  database: string
+  mode: 'combined' | 'by_gene'
+}) {
+  return http.post('/plots/enrichment_bubble', params)
+}
+
+export function renderParameterSurface(params: {
+  session_id: string
+  x_param: string
+  y_param?: string
+}) {
+  return http.post('/plots/parameter_surface', params)
+}
+
 /** 会话清理 (使用 beacon，不走 axios) */
 export function cleanupSession(sessionId: string) {
   const formData = new FormData()
   formData.append('session_id', sessionId)
-  navigator.sendBeacon('/api/cleanup', formData)
+  navigator.sendBeacon(`${API_BASE_URL}/cleanup`, formData)
+}
+
+export function downloadPlot(params: {
+  session_id: string
+  plot_type: string
+  format: 'png' | 'svg' | 'pdf'
+  reduction?: string
+  random_state?: number
+  cluster_id?: number
+  database?: string
+  mode?: 'combined' | 'by_gene'
+  x_param?: string
+  y_param?: string
+}) {
+  return http.post('/plots/download', params, { responseType: 'blob' })
 }

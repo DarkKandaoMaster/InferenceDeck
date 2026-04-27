@@ -5,7 +5,7 @@ import { useAnalysisActions } from '~/composables/domain/useAnalysisActions'
 
 const { isLoading } = useUIState()
 const { isTestMode, isPsLoading } = useAlgorithmState()
-const { runAnalysisFlow, runParameterSearchFlow } = useAnalysisActions()
+const { analysisStatus, runAnalysisFlow, runParameterSearchFlow } = useAnalysisActions()
 </script>
 
 <template>
@@ -18,7 +18,7 @@ const { runAnalysisFlow, runParameterSearchFlow } = useAnalysisActions()
     >
       <span class="flex items-center gap-2">
         <span v-if="isLoading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-        {{ isLoading ? '分析运行中...' : '🚀 启动聚类分析 (Run Analysis)' }}
+        {{ isLoading ? (analysisStatus || 'Running analysis...') : 'Run Analysis' }}
       </span>
     </button>
 
@@ -30,7 +30,7 @@ const { runAnalysisFlow, runParameterSearchFlow } = useAnalysisActions()
     >
       <span class="flex items-center gap-2">
         <span v-if="isPsLoading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-        {{ isPsLoading ? '搜索测试中...' : '🎯 运行参数敏感性搜索' }}
+        {{ isPsLoading ? 'Searching...' : 'Run Parameter Search' }}
       </span>
     </button>
   </div>

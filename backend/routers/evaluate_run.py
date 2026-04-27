@@ -80,22 +80,24 @@ async def evaluate_custom(
         labels = df_filtered.iloc[:, 0].values
         embeddings = df_filtered.iloc[:, 1:].values
 
-        # 5. 持久化中间结果，供 /api/visualize 读取
-        result_path = os.path.join(UPLOAD_PATH, "cluster_result.joblib")
-        joblib.dump({
-            "labels": labels,
-            "embeddings": embeddings,
-            "sample_names": filtered_sample_names,
-            "method": "Custom Evaluation",
-        }, result_path)
+        # 5. 持久化中间结果，供 /api/analysis 读取（Parquet 格式）
+        n_features = embeddings.shape[1]
+        df_result = pd.DataFrame(
+            embeddings,
+            columns=[f"emb_{i}" for i in range(n_features)]
+        )
+        df_result.insert(0, "sample_name", filtered_sample_names)
+        df_result.insert(1, "label", labels)
+        result_path = os.path.join(UPLOAD_PATH, "cluster_result.parquet")
+        df_result.to_parquet(result_path, index=False)
 
         # 清理临时结果文件
         cleanup_temp_files(temp_paths)
 
-        # 6. 返回基础聚类信息（不含指标和散点图，由 /api/visualize 负责）
+        # 6. 返回基础聚类信息（不含指标和散点图，由 /api/analysis 负责）
         return {
             "status": "success",
-            "message": "自定义结果解析成功，请调用 /api/visualize 获取评估结果",
+            "message": "自定义结果解析成功，请调用 /api/analysis 获取评估结果",
             "server_time": datetime.datetime.now().isoformat(),
             "data": {
                 "method": "Custom Evaluation",

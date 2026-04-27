@@ -5,6 +5,7 @@ pandas
 numpy
 scipy
 scikit-learn
+seaborn
 snfpy
 umap-learn
 lifelines
@@ -12,6 +13,7 @@ gseapy
 joblib
 python-multipart
 openpyxl
+pyarrow
 
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 （不过本项目似乎没有使用到torch...）
 

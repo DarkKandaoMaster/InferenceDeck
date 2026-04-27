@@ -1,37 +1,79 @@
-import { runAlgorithm, runAnalysis as apiRunAnalysis, evaluateCustom, runParameterSearch } from '~/utils/api'
+import { evaluateCustom, runAlgorithm, runAnalysis as apiRunAnalysis, runParameterSearch } from '~/utils/api'
 import { useSession } from '~/composables/core/useSession'
 import { useUIState } from '~/composables/core/useUIState'
 import { useDataState } from '~/composables/domain/useDataState'
 import { useAlgorithmState } from '~/composables/domain/useAlgorithmState'
+import { useDifferential } from '~/composables/domain/useDifferential'
+import { useEnrichment } from '~/composables/domain/useEnrichment'
+import { useSurvival } from '~/composables/domain/useSurvival'
 
-// 分析结果（全局共享）
 const backendResponse = ref<any>(null)
+const analysisStatus = ref('')
 
 export function useAnalysisActions() {
   const { sessionId } = useSession()
   const { isLoading, setError, clearError } = useUIState()
-  const { isOmicsUploaded, isClinicalUploaded, omicsFileConfigs, doUploadOmics, doUploadClinical, isCustomEvalMode, customEvalFile } = useDataState()
-  const { selectedAlgorithm, kValue, maxIter, nNeighbors, randomSeed, currentReduction, testNClusters, testMaxIter, testNNeighbors, psResult, isPsLoading, psParam1, psParam2 } = useAlgorithmState()
+  const {
+    clinicalFile,
+    isOmicsUploaded,
+    isClinicalUploaded,
+    omicsFileConfigs,
+    doUploadOmics,
+    doUploadClinical,
+    isCustomEvalMode,
+    customEvalFile,
+  } = useDataState()
+  const {
+    selectedAlgorithm,
+    kValue,
+    maxIter,
+    nNeighbors,
+    randomSeed,
+    currentReduction,
+    testNClusters,
+    testMaxIter,
+    testNNeighbors,
+    psResult,
+    isPsLoading,
+    psParam1,
+    psParam2,
+  } = useAlgorithmState()
 
-  /** 运行聚类分析 (内置算法 或 自定义评估) */
+  async function runDownstreamAnalyses() {
+    const { runDifferentialAnalysis, diffResult } = useDifferential()
+    const { runEnrichmentAnalysis } = useEnrichment()
+    const { runSurvivalAnalysis } = useSurvival()
+
+    analysisStatus.value = '正在运行差异表达分析...'
+    await runDifferentialAnalysis({ silent: true })
+
+    if (diffResult.value?.clusters) {
+      analysisStatus.value = '正在运行功能富集分析...'
+      await runEnrichmentAnalysis('GO', { silent: true })
+    }
+
+    if (clinicalFile.value) {
+      analysisStatus.value = '正在计算生存曲线...'
+      await runSurvivalAnalysis({ silent: true })
+    }
+  }
+
   async function runAnalysisFlow() {
-    // === 自定义评估模式 ===
     if (isCustomEvalMode.value) {
-      if (!customEvalFile.value) { alert('请先选择结果数据文件！'); return }
+      if (!customEvalFile.value) { alert('请先选择结果数据文件。'); return }
 
       isLoading.value = true
       clearError()
       backendResponse.value = null
+      analysisStatus.value = '正在评估聚类结果...'
 
       try {
         if (omicsFileConfigs.value.length > 0 && !isOmicsUploaded.value) await doUploadOmics(sessionId.value)
-        if (useDataState().clinicalFile.value && !isClinicalUploaded.value) await doUploadClinical(sessionId.value)
+        if (clinicalFile.value && !isClinicalUploaded.value) await doUploadClinical(sessionId.value)
 
         const formData = new FormData()
         formData.append('file', customEvalFile.value)
         formData.append('session_id', sessionId.value)
-        formData.append('reduction', currentReduction.value)
-        formData.append('random_state', String(randomSeed.value))
 
         await evaluateCustom(formData)
         const res = await apiRunAnalysis({
@@ -41,21 +83,23 @@ export function useAnalysisActions() {
         })
 
         backendResponse.value = res.data
+        await runDownstreamAnalyses()
       } catch (error: any) {
         setError(error.response?.data?.detail || '评估失败，请检查数据。')
       } finally {
+        analysisStatus.value = ''
         isLoading.value = false
       }
       return
     }
 
-    // === 内置算法模式 ===
-    if (omicsFileConfigs.value.length === 0) { alert('请先选择组学数据文件！'); return }
-    if (selectedAlgorithm.value.length === 0) { alert('请先选择至少一种算法！'); return }
+    if (omicsFileConfigs.value.length === 0) { alert('请先选择组学数据文件。'); return }
+    if (selectedAlgorithm.value.length === 0) { alert('请先选择至少一种算法。'); return }
 
     isLoading.value = true
     clearError()
     backendResponse.value = null
+    analysisStatus.value = '正在运行聚类分析...'
 
     try {
       if (!isOmicsUploaded.value) await doUploadOmics(sessionId.value)
@@ -70,6 +114,7 @@ export function useAnalysisActions() {
         n_neighbors: nNeighbors.value,
       })
 
+      analysisStatus.value = '正在计算指标与后端绘图...'
       const res = await apiRunAnalysis({
         session_id: sessionId.value,
         reduction: currentReduction.value,
@@ -77,14 +122,15 @@ export function useAnalysisActions() {
       })
 
       backendResponse.value = res.data
+      await runDownstreamAnalyses()
     } catch (error: any) {
       setError(error.response?.data?.detail || '连接后端失败或上传出错。')
     } finally {
+      analysisStatus.value = ''
       isLoading.value = false
     }
   }
 
-  /** 切换降维方式 (只重跑 /api/analysis，不重跑聚类) */
   async function switchReduction(method: string) {
     if (currentReduction.value === method) return
     currentReduction.value = method
@@ -104,15 +150,13 @@ export function useAnalysisActions() {
     }
   }
 
-  /** 运行参数敏感性搜索 */
   async function runParameterSearchFlow() {
-    const { clinicalFile } = useDataState()
     if (omicsFileConfigs.value.length === 0 || !clinicalFile.value) {
-      alert('测试模式需要计算 P-value，请确保已选择组学数据和临床数据！')
+      alert('测试模式需要组学数据和临床数据。')
       return
     }
-    if (selectedAlgorithm.value.length === 0) { alert('请先选择至少一种算法！'); return }
-    if (selectedAlgorithm.value.length > 1) { alert('测试模式暂时不能多选算法，请只选择一种！'); return }
+    if (selectedAlgorithm.value.length === 0) { alert('请先选择至少一种算法。'); return }
+    if (selectedAlgorithm.value.length > 1) { alert('测试模式请只选择一种算法。'); return }
 
     isPsLoading.value = true
     psResult.value = null
@@ -127,22 +171,26 @@ export function useAnalysisActions() {
           n_clusters: testNClusters.value.split(',').map(Number),
           max_iter: testMaxIter.value.split(',').map(Number),
         }
-        psParam1.value = 'n_clusters'; psParam2.value = 'max_iter'
+        psParam1.value = 'n_clusters'
+        psParam2.value = 'max_iter'
       } else if (selectedAlgorithm.value[0] === 'Spectral Clustering') {
         paramGridObj = {
           n_clusters: testNClusters.value.split(',').map(Number),
           n_neighbors: testNNeighbors.value.split(',').map(Number),
         }
-        psParam1.value = 'n_clusters'; psParam2.value = 'n_neighbors'
+        psParam1.value = 'n_clusters'
+        psParam2.value = 'n_neighbors'
       } else if (selectedAlgorithm.value[0] === 'NEMO') {
         paramGridObj = { n_clusters: testNClusters.value.split(',').map(Number) }
-        psParam1.value = 'n_clusters'; psParam2.value = ''
+        psParam1.value = 'n_clusters'
+        psParam2.value = ''
       } else if (selectedAlgorithm.value[0] === 'SNF') {
         paramGridObj = {
           n_clusters: testNClusters.value.split(',').map(Number),
           n_neighbors: testNNeighbors.value.split(',').map(Number),
         }
-        psParam1.value = 'n_clusters'; psParam2.value = 'n_neighbors'
+        psParam1.value = 'n_clusters'
+        psParam2.value = 'n_neighbors'
       }
 
       const res = await runParameterSearch({
@@ -153,6 +201,8 @@ export function useAnalysisActions() {
       })
 
       psResult.value = res.data
+      psParam1.value = res.data.x_param || psParam1.value
+      psParam2.value = res.data.y_param || ''
     } catch (error: any) {
       alert('测试模式运行失败: ' + (error.response?.data?.detail || error.message))
     } finally {
@@ -162,6 +212,7 @@ export function useAnalysisActions() {
 
   return {
     backendResponse,
+    analysisStatus,
     runAnalysisFlow,
     switchReduction,
     runParameterSearchFlow,

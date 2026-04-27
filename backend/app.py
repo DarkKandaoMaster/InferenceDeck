@@ -17,7 +17,7 @@ app=FastAPI(
     title="OmicsInferenceDeck API Platform", #设置API文档的标题
     description="Backend for Multi-Omics Cancer Subtyping Platform", #设置API的描述信息
     version="1.0.0", #设置版本号
-    lifespan=lifespan # <--- 【新增】挂载生命周期管理器
+    lifespan=lifespan #挂载生命周期管理器
 )
 
 #配置CORS（跨域资源共享）中间件
@@ -61,3 +61,6 @@ app.include_router(enrichment_router)
 
 from routers.parameter_run import router as parameter_run_router
 app.include_router(parameter_run_router)
+
+from routers.plots import router as plots_router
+app.include_router(plots_router)
