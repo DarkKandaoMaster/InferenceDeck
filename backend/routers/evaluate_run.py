@@ -4,10 +4,10 @@
 import os
 import shutil
 import datetime
-import joblib
 import pandas as pd
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 from cleanup import cleanup_temp_files
+from routers.upload import CLINICAL_DATA_FILE, OMICS_DATA_FILE, load_frame_dict
 
 # 创建路由器实例
 router = APIRouter()
@@ -51,9 +51,9 @@ async def evaluate_custom(
         # 3. 与已上传的组学/临床数据取交集，过滤无效样本
         valid_samples = set(sample_names)
 
-        omics_path = os.path.join(UPLOAD_PATH, "omics_data.joblib")
+        omics_path = os.path.join(UPLOAD_PATH, OMICS_DATA_FILE)
         if os.path.exists(omics_path):
-            omics_dict = joblib.load(omics_path)
+            omics_dict = load_frame_dict(omics_path)
             omics_samples = set()
             for o_df in omics_dict.values():
                 if not omics_samples:
@@ -62,9 +62,9 @@ async def evaluate_custom(
                     omics_samples &= set(o_df.index.astype(str))
             valid_samples &= omics_samples
 
-        clinical_path = os.path.join(UPLOAD_PATH, "clinical_data.joblib")
+        clinical_path = os.path.join(UPLOAD_PATH, CLINICAL_DATA_FILE)
         if os.path.exists(clinical_path):
-            clinical_dict = joblib.load(clinical_path)
+            clinical_dict = load_frame_dict(clinical_path)
             clinical_df = list(clinical_dict.values())[0]
             valid_samples &= set(clinical_df.index.astype(str))
 
@@ -80,7 +80,7 @@ async def evaluate_custom(
         labels = df_filtered.iloc[:, 0].values
         embeddings = df_filtered.iloc[:, 1:].values
 
-        # 5. 持久化中间结果，供 /api/analysis 读取（Parquet 格式）
+        # 5. 持久化中间结果，供 /api/metrics 和 /api/plots/cluster_scatter 读取（Parquet 格式）
         n_features = embeddings.shape[1]
         df_result = pd.DataFrame(
             embeddings,
@@ -94,10 +94,10 @@ async def evaluate_custom(
         # 清理临时结果文件
         cleanup_temp_files(temp_paths)
 
-        # 6. 返回基础聚类信息（不含指标和散点图，由 /api/analysis 负责）
+        # 6. 返回基础聚类信息（不含指标和散点图，由独立指标/绘图接口负责）
         return {
             "status": "success",
-            "message": "自定义结果解析成功，请调用 /api/analysis 获取评估结果",
+            "message": "自定义结果解析成功，请调用 /api/metrics 获取指标，并调用 /api/plots/cluster_scatter 获取散点图",
             "server_time": datetime.datetime.now().isoformat(),
             "data": {
                 "method": "Custom Evaluation",

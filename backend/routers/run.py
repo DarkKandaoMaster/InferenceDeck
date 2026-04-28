@@ -3,11 +3,11 @@
 # =============================================================================
 import os
 import datetime
-import joblib
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from algorithms import load_algorithm
+from routers.upload import OMICS_DATA_FILE, load_frame_dict
 
 # 创建路由器实例
 router=APIRouter()
@@ -59,12 +59,12 @@ async def run_analysis(request:AnalysisRequest): #指定record的类型为Analys
     try:
         # 1.读取"/api/upload"已经处理好的组学数据文件
         # file_path=os.path.join("upload",request.filename) #"/api/upload"已经处理好的组学数据文件的所在路径
-        # 【修改】加载 joblib 二进制字典
-        file_path=os.path.join("upload",request.session_id,"omics_data.joblib")
+        # 加载 parquet 输入数据和 JSON 元数据
+        file_path=os.path.join("upload",request.session_id,OMICS_DATA_FILE)
         if not os.path.exists(file_path): #检查该路径是否存在
             # raise FileNotFoundError(f"找不到文件: {request.filename}")
             raise FileNotFoundError(f"找不到组学数据文件，请先上传数据")
-        data_dict = joblib.load(file_path)
+        data_dict = load_frame_dict(file_path)
 
         # 2. 动态加载算法，并传入所有的参数实例化
         algo_class = load_algorithm(request.algorithm)
@@ -82,7 +82,7 @@ async def run_analysis(request:AnalysisRequest): #指定record的类型为Analys
         #   sample_names — 长度 n_samples 的列表，样本名称
         labels, embeddings, sample_names = algo_instance.fit_predict(data_dict)
 
-        # 4. 将中间结果持久化到 cluster_result.parquet，供 /api/analysis 和 analysis.R 读取
+        # 4. 将中间结果持久化到 cluster_result.parquet，供 /api/metrics 和 /api/plots/cluster_scatter 读取
         n_features = embeddings.shape[1]
         df_result = pd.DataFrame(
             embeddings,
@@ -93,10 +93,10 @@ async def run_analysis(request:AnalysisRequest): #指定record的类型为Analys
         result_path = os.path.join("upload", request.session_id, "cluster_result.parquet")
         df_result.to_parquet(result_path, index=False)
 
-        # 5. 返回基础聚类信息（不含指标和散点图，由 /api/analysis 负责）
+        # 5. 返回基础聚类信息（不含指标和散点图，由独立指标/绘图接口负责）
         return {
             "status": "success",
-            "message": f"算法 {request.algorithm} 运行成功，请调用 /api/analysis 获取评估结果",
+            "message": f"算法 {request.algorithm} 运行成功，请调用 /api/metrics 获取指标，并调用 /api/plots/cluster_scatter 获取散点图",
             "server_time": datetime.datetime.now().isoformat(),
             "data": {
                 "method": request.algorithm,
