@@ -1,3 +1,10 @@
+"""计算聚类结果和临床结果的评价指标。
+
+本文件读取 run.py 或 evaluate_run.py 生成的 cluster_result.parquet，并调用 R 脚本
+计算聚类质量指标。它也会把聚类标签和 upload.py 保存的临床数据合并，计算临床
+相关指标，并把生存分析需要的 p 值写入 survival_meta.json，供 survival.py 和 plots.py 使用。
+"""
+
 import datetime
 import json
 import subprocess
@@ -7,7 +14,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from plots.base import CLUSTER_RESULT_FILE, plot_path
+from plots.base import CLUSTER_RESULT_FILE, plot_path, write_json
 from routers.upload import CLINICAL_DATA_FILE, load_frame_dict
 
 
@@ -155,6 +162,9 @@ async def clinical_metrics(request: MetricsRequest):
         clinical_metrics_scores = compute_clinical_metrics(str(input_path))
         clinical_metrics_scores["matched_samples"] = matched_samples
         clinical_metrics_scores["lost_samples"] = lost_samples
+
+        lrt = clinical_metrics_scores.get("lrt") or {}
+        write_json(plot_path(request.session_id, "survival_meta.json"), {"p_value": lrt.get("p_value")}) #这样可以方便后续绘制生存曲线时显示这里的已经计算出的p值
 
         return {
             "status": "success",
