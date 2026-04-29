@@ -13,6 +13,7 @@ gseapy
 python-multipart
 openpyxl
 pyarrow
+pyrea
 
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 （不过本项目似乎没有使用到torch...）
 
@@ -27,6 +28,7 @@ install.packages("gtsummary")
 install.packages("broom")
 devtools::install_github("Shamir-Lab/NEMO/NEMO")
 devtools::install_github("DXCODEE/MOSD")
+devtools::install_github("mpierrejean/pintmf")
 install.packages("BiocManager")
 BiocManager::install("clusterProfiler")
 BiocManager::install("limma")

@@ -20,6 +20,9 @@ export function useAnalysisActions() {
     omicsFileConfigs,
     doUploadOmics,
     doUploadClinical,
+    doUploadExpressionMatrix,
+    expressionMatrixFile,
+    isExpressionMatrixUploaded,
     isCustomEvalMode,
     customEvalFile,
   } = useDataState()
@@ -155,6 +158,7 @@ export function useAnalysisActions() {
       try {
         if (omicsFileConfigs.value.length > 0 && !isOmicsUploaded.value) await doUploadOmics(sessionId.value)
         if (clinicalFile.value && !isClinicalUploaded.value) await doUploadClinical(sessionId.value)
+        if (expressionMatrixFile.value && !isExpressionMatrixUploaded.value) await doUploadExpressionMatrix(sessionId.value)
 
         const formData = new FormData()
         formData.append('file', customEvalFile.value)
@@ -183,6 +187,7 @@ export function useAnalysisActions() {
     try {
       if (!isOmicsUploaded.value) await doUploadOmics(sessionId.value)
       if (clinicalFile.value && !isClinicalUploaded.value) await doUploadClinical(sessionId.value)
+      if (expressionMatrixFile.value && !isExpressionMatrixUploaded.value) await doUploadExpressionMatrix(sessionId.value)
 
       analysisStatus.value = '正在跑算法...'
       await runAlgorithm({
@@ -264,6 +269,10 @@ export function useAnalysisActions() {
         }
         psParam1.value = 'n_clusters'
         psParam2.value = 'n_neighbors'
+      } else if (selectedAlgorithm.value[0] === 'Hclust') {
+        paramGridObj = { n_clusters: testNClusters.value.split(',').map(Number) }
+        psParam1.value = 'n_clusters'
+        psParam2.value = ''
       } else if (selectedAlgorithm.value[0] === 'NEMO') {
         paramGridObj = { n_clusters: testNClusters.value.split(',').map(Number) }
         psParam1.value = 'n_clusters'
@@ -275,7 +284,15 @@ export function useAnalysisActions() {
         }
         psParam1.value = 'n_clusters'
         psParam2.value = 'n_neighbors'
+      } else if (selectedAlgorithm.value[0] === 'PIntMF') {
+        paramGridObj = { n_clusters: testNClusters.value.split(',').map(Number) }
+        psParam1.value = 'n_clusters'
+        psParam2.value = ''
       } else if (selectedAlgorithm.value[0] === 'MOSD') {
+        paramGridObj = { n_clusters: testNClusters.value.split(',').map(Number) }
+        psParam1.value = 'n_clusters'
+        psParam2.value = ''
+      } else if (selectedAlgorithm.value[0] === 'Parea') {
         paramGridObj = { n_clusters: testNClusters.value.split(',').map(Number) }
         psParam1.value = 'n_clusters'
         psParam2.value = ''
